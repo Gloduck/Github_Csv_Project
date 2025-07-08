@@ -884,6 +884,7 @@
                 return;
             }
 
+            const filterCookieNames = fetchData.ignoreNames ? fetchData.ignoreNames.split(',') : [];
             let cookies = JSON.parse(fetchData.cookies);
 
             // 检查过期Cookie
@@ -892,6 +893,9 @@
             const validCookies = [];
 
             cookies.forEach(cookie => {
+                if (filterCookieNames.includes(cookie.name)) {
+                    return;
+                }
                 if (cookie.expirationDate && cookie.expirationDate < now) {
                     expiredCookies.push(cookie);
                 } else {
@@ -910,10 +914,7 @@
                     confirmButtonText: '强制写入',
                     cancelButtonText: '取消操作',
                 });
-                console.log(isConfirmed);
-                if (isConfirmed) {
-                    cookies = validCookies;
-                } else {
+                if (!isConfirmed) {
                     return;
                 }
             }
@@ -936,7 +937,7 @@
             await Promise.all(deletePromises);
 
 
-            const setCookiePromises = cookies.map(cookie =>
+            const setCookiePromises = validCookies.map(cookie =>
                 new Promise((resolve, reject) => {
                     GM_cookie.set(cookie, (error) => {
                         error ? reject(error) : resolve();
@@ -960,6 +961,73 @@
         }
     }
 
+    async function createDbIfNotExist() {
+        let success = false;
+        try {
+            const dbCreated = await csvDb(DB_FILE.PATH).createIfNotExist(DB_FILE.FILE, ['domain', 'ignoreNames', 'cookies', 'createTime', 'updateTime']);
+            if (dbCreated) {
+                console.log('[Cookie管理器] 数据库不存在，已创建数据库');
+            }
+            success = true;
+        } catch (error) {
+            Swal.fire('创建数据库失败', `错误信息: ${error.message || error}`, 'error');
+        }
+        return success;
+    }
+
+    async function setIgnoreCookieNames() {
+        if (!await createDbIfNotExist()) {
+            return;
+        }
+        try {
+            const domain = getRootDomain();
+            const existingRecord = await csvDb(DB_FILE.PATH)
+                .selectFrom(DB_FILE.FILE)
+                .eq('domain', domain)
+                .fetchOne();
+            let ignoreCookieNames = existingRecord ? existingRecord.ignoreNames : '';
+            const { value, isConfirmed } = await Swal.fire({
+                title: '过滤 Cookie',
+                input: 'text',
+                inputValue: ignoreCookieNames,
+                inputLabel: '输入需要过滤的 Cookie 名称',
+                inputPlaceholder: '多个名称用逗号分隔，例如: session, token',
+                inputAttributes: {
+                    'aria-label': '输入需要过滤的 Cookie 名称'
+                },
+                showCancelButton: true,
+                confirmButtonText: '确认',
+                cancelButtonText: '取消',
+            });
+            if (!isConfirmed) {
+                return;
+            }
+            const now = Date.now();
+            if (existingRecord) {
+                await csvDb(DB_FILE.PATH)
+                    .update(DB_FILE.FILE)
+                    .eq('domain', domain)
+                    .set('ignoreNames', value)
+                    .set('updateTime', now)
+                    .execute();
+            } else {
+                await csvDb(DB_FILE.PATH)
+                    .insertInto(DB_FILE.FILE)
+                    .value({
+                        domain,
+                        cookies: '',
+                        ignoreNames: value,
+                        createTime: now,
+                        updateTime: now
+                    })
+                    .execute();
+            }
+            Swal.fire('设置成功', '需要过滤的Cookie名已成功保存到数据库', 'success');
+        } catch (error) {
+            Swal.fire('设置失败', `错误信息: ${error.message || error}`, 'error');
+        }
+    }
+
     async function writeCookie() {
         const { isConfirmed } = await Swal.fire({
             title: '确认保存',
@@ -972,12 +1040,10 @@
         if (!isConfirmed) {
             return;
         }
+        if (!await createDbIfNotExist()) {
+            return;
+        }
         try {
-            const dbCreated = await csvDb(DB_FILE.PATH).createIfNotExist(DB_FILE.FILE, ['domain', 'cookies', 'createTime', 'updateTime']);
-            if (dbCreated) {
-                console.log('[Cookie管理器] 数据库不存在，已创建数据库');
-            }
-
             const domain = getRootDomain();
 
             const cookies = await new Promise((resolve, reject) => {
@@ -990,22 +1056,29 @@
                     resolve(cookies);
                 });
             });
-            const cookiesStr = JSON.stringify(cookies);
-            const now = Date.now();
 
             const existingRecord = await csvDb(DB_FILE.PATH)
                 .selectFrom(DB_FILE.FILE)
                 .eq('domain', domain)
                 .fetchOne();
+            const filterCookieNames = existingRecord?.ignoreNames ? existingRecord.ignoreNames.split(',') : [];
+            const validCookies = [];
+
+            cookies.forEach(cookie => {
+                if (filterCookieNames.includes(cookie.name)) {
+                    return;
+                }
+                validCookies.push(cookie);
+            });
+            const cookiesStr = JSON.stringify(validCookies);
+            const now = Date.now();
 
             if (existingRecord) {
                 await csvDb(DB_FILE.PATH)
                     .update(DB_FILE.FILE)
                     .eq('domain', domain)
-                    .set({
-                        cookies: cookiesStr,
-                        updateTime: now
-                    })
+                    .set('cookies', cookiesStr)
+                    .set('updateTime', now)
                     .execute();
             } else {
                 await csvDb(DB_FILE.PATH)
@@ -1013,6 +1086,7 @@
                     .value({
                         domain,
                         cookies: cookiesStr,
+                        ignoreNames: '',
                         createTime: now,
                         updateTime: now
                     })
@@ -1141,8 +1215,9 @@
                     <thead>
                         <tr>
                             <th style="width: 20%;">域名</th>
-                            <th style="width: 60%;">值</th>
-                            <th style="width: 20%;">操作</th>
+                            <th style="width: 20%;">忽略</th>
+                            <th style="width: 50%;">值</th>
+                            <th style="width: 10%;">操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1152,6 +1227,7 @@
                 tableHTML += `
                     <tr>
                         <td>${escapeHTML(cookie.domain)}</td>
+                        <td>${escapeHTML(cookie.ignoreNames)}</td>
                         <td>${escapeHTML(cookie.cookies)}</td>
                         <td>
                             <button class="delete-btn" 
@@ -1220,6 +1296,7 @@
     GM_registerMenuCommand('❌ 清除GitHub仓库配置', clearGitConfig);
     GM_registerMenuCommand('👉保存网站Cookie到仓库', writeCookie);
     GM_registerMenuCommand('👉从仓库读取网站Cookie', readCookie);
+    GM_registerMenuCommand('👉设置忽略Cookie名', setIgnoreCookieNames);
     GM_registerMenuCommand('👉管理仓库Cookie', showCookieManager);
     GM_registerMenuCommand('👉清空网站本地Cookie', clearLocalCookie);
 
