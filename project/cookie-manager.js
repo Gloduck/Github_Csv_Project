@@ -918,6 +918,24 @@
                 }
             }
 
+            // 先删除原有Cookie
+            const deletePromises = cookies.map(cookie =>
+                new Promise((resolve, reject) => {
+                    GM_cookie.delete({
+                        name: cookie.name,
+                        domain: cookie.domain,
+                        path: cookie.path,
+                        secure: cookie.secure,
+                        httpOnly: cookie.httpOnly
+                    }, error => {
+                        error ? reject(error) : resolve();
+                    });
+                })
+            );
+
+            await Promise.all(deletePromises);
+
+
             const setCookiePromises = cookies.map(cookie =>
                 new Promise((resolve, reject) => {
                     GM_cookie.set(cookie, (error) => {
