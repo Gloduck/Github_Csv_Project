@@ -80,8 +80,8 @@
 
     async function clearGitConfig() {
         const { isConfirmed } = await Swal.fire({
-            title: '确认清除?',
-            text: '将删除所有保存的GitHub配置',
+            title: '确认清除',
+            text: '该操作将删除所有保存的GitHub配置',
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
@@ -866,8 +866,20 @@
     }
 
     async function readCookie() {
-        const rootDomain = getRootDomain();
+        const { isConfirmed } = await Swal.fire({
+            title: '确认读取',
+            text: '该操作将使用远程Cookie覆盖掉本地的Cookie',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: '确认',
+            cancelButtonText: '取消'
+        });
+        if (!isConfirmed) {
+            return;
+        }
         try {
+            const rootDomain = getRootDomain();
             const fetchData = await csvDb(DB_FILE.PATH).selectFrom(DB_FILE.FILE).eq('domain', rootDomain).fetchOne();
 
             if (!fetchData) {
@@ -901,6 +913,18 @@
     }
 
     async function writeCookie() {
+        const { isConfirmed } = await Swal.fire({
+            title: '确认保存',
+            text: '该操作将保存当前网站Cookie到远程，如果已经存在则会覆盖',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: '确认',
+            cancelButtonText: '取消'
+        });
+        if (!isConfirmed) {
+            return;
+        }
         try {
             const dbCreated = await csvDb(DB_FILE.PATH).createIfNotExist(DB_FILE.FILE, ['domain', 'cookies', 'createTime', 'updateTime']);
             if (dbCreated) {
@@ -956,6 +980,18 @@
     }
 
     async function clearLocalCookie() {
+        const { isConfirmed } = await Swal.fire({
+            title: '确认清空',
+            text: '该操作将清空本地所有的Cookie',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: '确认',
+            cancelButtonText: '取消'
+        });
+        if (!isConfirmed) {
+            return;
+        }
         try {
             const rootDomain = getRootDomain();
 
@@ -1107,7 +1143,7 @@
                                     .deleteFrom(DB_FILE.FILE)
                                     .eq('domain', targetDomain)
                                     .execute();
-                                if(deleteCount > 0){
+                                if (deleteCount > 0) {
                                     btn.closest('tr').remove();
                                 }
                             } catch (error) {
