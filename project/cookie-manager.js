@@ -64,7 +64,6 @@
                 };
             },
             showCancelButton: true,
-            confirmButtonColor: '#d33',
             confirmButtonText: '确认',
             cancelButtonText: '取消'
         });
@@ -84,7 +83,6 @@
             text: '该操作将删除所有保存的GitHub配置',
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#d33',
             confirmButtonText: '确认',
             cancelButtonText: '取消'
         });
@@ -871,7 +869,6 @@
             text: '该操作将使用远程Cookie覆盖掉本地的Cookie',
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#d33',
             confirmButtonText: '确认',
             cancelButtonText: '取消'
         });
@@ -887,7 +884,40 @@
                 return;
             }
 
-            const cookies = JSON.parse(fetchData.cookies);
+            let cookies = JSON.parse(fetchData.cookies);
+
+            // 检查过期Cookie
+            const now = Math.floor(Date.now() / 1000); // 当前时间戳（秒）
+            const expiredCookies = [];
+            const validCookies = [];
+
+            cookies.forEach(cookie => {
+                if (cookie.expirationDate && cookie.expirationDate < now) {
+                    expiredCookies.push(cookie);
+                } else {
+                    validCookies.push(cookie);
+                }
+            });
+
+            // 处理过期Cookie
+            if (expiredCookies.length > 0) {
+                const expireCookieNames = expiredCookies.map(value => value.name).join(',');
+                const { isConfirmed } = await Swal.fire({
+                    title: '存在过期Cookie',
+                    html: `有 ${expiredCookies.length} 个Cookie已过期<br>是否强制写入？\n${expireCookieNames}`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '强制写入',
+                    cancelButtonText: '取消操作',
+                });
+                console.log(isConfirmed);
+                if (isConfirmed) {
+                    cookies = validCookies;
+                } else {
+                    return;
+                }
+            }
+
             const setCookiePromises = cookies.map(cookie =>
                 new Promise((resolve, reject) => {
                     GM_cookie.set(cookie, (error) => {
@@ -918,7 +948,6 @@
             text: '该操作将保存当前网站Cookie到远程，如果已经存在则会覆盖',
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#d33',
             confirmButtonText: '确认',
             cancelButtonText: '取消'
         });
@@ -985,7 +1014,6 @@
             text: '该操作将清空本地所有的Cookie',
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#d33',
             confirmButtonText: '确认',
             cancelButtonText: '取消'
         });
