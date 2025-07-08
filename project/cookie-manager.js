@@ -904,7 +904,7 @@
                 const expireCookieNames = expiredCookies.map(value => value.name).join(',');
                 const { isConfirmed } = await Swal.fire({
                     title: '存在过期Cookie',
-                    html: `有 ${expiredCookies.length} 个Cookie已过期<br>是否强制写入？\n${expireCookieNames}`,
+                    html: `有 ${expiredCookies.length} 个Cookie已过期\n是否强制写入？\n${expireCookieNames}`,
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: '强制写入',
