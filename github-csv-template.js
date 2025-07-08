@@ -37,10 +37,10 @@
     }
 
     // 显示配置弹窗
-    async function showConfigDialog() {
+    async function showGitConfigDialog() {
         const config = await getConfig();
 
-        const {value: formValues} = await Swal.fire({
+        const { value: formValues } = await Swal.fire({
             title: 'GitHub 仓库设置',
             html: `
                 <input id="owner" class="swal2-input" placeholder="仓库所有者" value="${config.owner}">
@@ -57,7 +57,10 @@
                     token: document.getElementById('token').value
                 };
             },
-            showCancelButton: true
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: '确认',
+            cancelButtonText: '取消'
         });
 
         if (formValues) {
@@ -66,6 +69,26 @@
             await GM_setValue(CONFIG_KEYS.BRANCH, formValues.branch);
             await GM_setValue(CONFIG_KEYS.TOKEN, formValues.token);
             Swal.fire('保存成功!', '仓库配置已更新', 'success');
+        }
+    }
+
+    async function clearGitConfig() {
+        const { isConfirmed } = await Swal.fire({
+            title: '确认清除?',
+            text: '将删除所有保存的GitHub配置',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: '确认',
+            cancelButtonText: '取消'
+        });
+
+        if (isConfirmed) {
+            await GM_deleteValue(CONFIG_KEYS.TOKEN);
+            await GM_deleteValue(CONFIG_KEYS.OWNER);
+            await GM_deleteValue(CONFIG_KEYS.REPO);
+            await GM_deleteValue(CONFIG_KEYS.BRANCH);
+            Swal.fire('已清除!', '所有配置已删除', 'success');
         }
     }
 
@@ -984,30 +1007,13 @@
     }
 
     // 注册菜单命令
-    GM_registerMenuCommand('⚙️ 设置GitHub仓库', showConfigDialog);
+    GM_registerMenuCommand('⚙️ 设置GitHub仓库', showGitConfigDialog);
     GM_registerMenuCommand(' 创建文件', handleCreateFile);
     GM_registerMenuCommand('✏️ 更新文件', handleUpdateFile);
     GM_registerMenuCommand('️ 删除文件', handleDeleteFile);
     GM_registerMenuCommand(' 文件列表', handleListFiles);
     GM_registerMenuCommand('️ 查看文件', handleViewFile);
-    GM_registerMenuCommand('❌ 清除配置', async () => {
-        const {isConfirmed} = await Swal.fire({
-            title: '确认清除?',
-            text: '将删除所有保存的GitHub配置',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            confirmButtonText: '是的，清除!'
-        });
-
-        if (isConfirmed) {
-            await GM_deleteValue(CONFIG_KEYS.TOKEN);
-            await GM_deleteValue(CONFIG_KEYS.OWNER);
-            await GM_deleteValue(CONFIG_KEYS.REPO);
-            await GM_deleteValue(CONFIG_KEYS.BRANCH);
-            Swal.fire('已清除!', '所有配置已删除', 'success');
-        }
-    });
+    GM_registerMenuCommand('❌ 清除配置', clearGitConfig);
 
     // 添加样式
     const style = document.createElement('style');
