@@ -877,27 +877,6 @@
         }
     }
 
-    async function deleteCookie() {
-        try {
-            const domain = getRootDomain();
-
-            const deleteCount = await csvDb(DB_FILE.PATH)
-                .deleteFrom(DB_FILE.FILE)
-                .eq('domain', domain)
-                .execute();
-
-            if (deleteCount > 0) {
-                Swal.fire('删除成功', '已经成功清空当前网站Cookie', 'success');
-            } else {
-                Swal.fire('删除成功', '当前网站Cookie不存在，无需清除', 'success');
-            }
-
-
-        } catch (error) {
-            Swal.fire('删除失败', `错误信息: ${error.message || error}`, 'error');
-        }
-    }
-
     async function writeCookie() {
         try {
             const dbCreated = await csvDb(DB_FILE.PATH).createIfNotExist(DB_FILE.FILE, ['domain', 'cookies', 'createTime', 'updateTime']);
@@ -997,8 +976,141 @@
             Swal.fire('清除失败', `错误信息: ${error.message || error}`, 'error');
         }
     }
+    async function showCookieManager() {
+        try {
+            const cookies = await csvDb(DB_FILE.PATH).selectFrom(DB_FILE.FILE).fetch()
 
-    // 注册菜单命令
+            let tableHTML = `
+                <style>
+                    .cookie-manager-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        table-layout: fixed;
+                    }
+                    .cookie-manager-table th, 
+                    .cookie-manager-table td {
+                        padding: 10px;
+                        text-align: left;
+                        border-bottom: 1px solid #ddd;
+                        border-right: 1px solid #ddd;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    }
+                    .cookie-manager-table th {
+                        background-color: #f2f2f2;
+                        position: sticky;
+                        top: 0;
+                        font-weight: bold;
+                    }
+                    .cookie-manager-table tr:last-child td {
+                        border-bottom: none;
+                    }
+                    .cookie-manager-table td:last-child, 
+                    .cookie-manager-table th:last-child {
+                        border-right: none;
+                    }
+                    .cookie-manager-container {
+                        max-height: 60vh;
+                        overflow-y: auto;
+                    }
+                    .delete-btn {
+                        background-color: #ff6b6b;
+                        color: white;
+                        border: none;
+                        padding: 5px 10px;
+                        border-radius: 3px;
+                        cursor: pointer;
+                        transition: background-color 0.2s;
+                    }
+                    .delete-btn:hover {
+                        background-color: #ff5252;
+                    }
+                    .delete-btn:disabled {
+                        background-color: #cccccc;
+                        cursor: not-allowed;
+                    }
+                </style>
+                <div class="cookie-manager-container">
+                <table class="cookie-manager-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 20%;">域名</th>
+                            <th style="width: 60%;">值</th>
+                            <th style="width: 20%;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            cookies.forEach(cookie => {
+                tableHTML += `
+                    <tr>
+                        <td>${escapeHTML(cookie.domain)}</td>
+                        <td>${escapeHTML(cookie.cookies)}</td>
+                        <td>
+                            <button class="delete-btn" 
+                                data-domain="${escapeHTML(cookie.domain)}">
+                                删除
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+
+            const { isDismissed } = await Swal.fire({
+                title: 'Cookie管理',
+                html: tableHTML,
+                width: '80%',
+                showConfirmButton: false,
+                showCloseButton: true,
+                didOpen: () => {
+                    document.querySelectorAll('.delete-btn').forEach(button => {
+                        button.addEventListener('click', async (e) => {
+                            const btn = e.currentTarget;
+                            const targetDomain = btn.dataset.domain;
+                            btn.textContent = '删除中...';
+                            btn.disabled = true;
+
+                            try {
+
+                                const deleteCount = await csvDb(DB_FILE.PATH)
+                                    .deleteFrom(DB_FILE.FILE)
+                                    .eq('domain', targetDomain)
+                                    .execute();
+                                if(deleteCount > 0){
+                                    btn.closest('tr').remove();
+                                }
+                            } catch (error) {
+                                btn.textContent = '删除';
+                                btn.disabled = false;
+                                Swal.fire('删除失败', `无法删除Cookie: ${error.message || error}`, 'error');
+                            }
+                        });
+                    });
+                }
+            });
+
+        } catch (error) {
+            Swal.fire('加载失败', `无法获取Cookie列表: ${error.message || error}`, 'error');
+        }
+    }
+
+    function escapeHTML(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     GM_registerMenuCommand('⚙️ 设置GitHub仓库', showConfigDialog);
     GM_registerMenuCommand('❌ 清除GitHub仓库配置', async () => {
         const { isConfirmed } = await Swal.fire({
@@ -1018,10 +1130,10 @@
             Swal.fire('已清除!', '所有配置已删除', 'success');
         }
     });
-    GM_registerMenuCommand('远程保存网站Cookie', writeCookie);
-    GM_registerMenuCommand('远程读取网站Cookie', readCookie);
-    GM_registerMenuCommand('远程删除网站Cookie', deleteCookie);
-    GM_registerMenuCommand('删除网站本地Cookie', clearLocalCookie);
+    GM_registerMenuCommand('👉保存网站Cookie到仓库', writeCookie);
+    GM_registerMenuCommand('👉从仓库读取网站Cookie', readCookie);
+    GM_registerMenuCommand('👉管理仓库Cookie', showCookieManager);
+    GM_registerMenuCommand('👉清空网站本地Cookie', clearLocalCookie);
 
 
     // 添加样式
