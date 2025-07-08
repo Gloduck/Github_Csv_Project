@@ -46,7 +46,7 @@
     async function showConfigDialog() {
         const config = await getConfig();
 
-        const {value: formValues} = await Swal.fire({
+        const { value: formValues } = await Swal.fire({
             title: 'GitHub 仓库设置',
             html: `
                 <input id="owner" class="swal2-input" placeholder="仓库所有者" value="${config.owner}">
@@ -105,7 +105,7 @@
                 try {
                     errorBody = await response.json();
                 } catch (e) {
-                    errorBody = {message: `API请求失败: ${response.status} ${response.statusText}`};
+                    errorBody = { message: `API请求失败: ${response.status} ${response.statusText}` };
                 }
                 throw {
                     status: response.status,
@@ -266,7 +266,7 @@
             if (!isNaN(numA) && !isNaN(numB)) {
                 return numA - numB;
             }
-            return a.localeCompare(b, undefined, {numeric: true});
+            return a.localeCompare(b, undefined, { numeric: true });
         }
     }
 
@@ -488,7 +488,7 @@
                 });
 
                 if (handler.shouldHandleData(row)) {
-                    const newRow = handler.handleData({...row});
+                    const newRow = handler.handleData({ ...row });
                     if (newRow !== null) {
                         records.push(prepareRecord(headers, newRow));
                     }
@@ -572,7 +572,7 @@
 
             async function execute() {
                 const csvContent = await getFileContent(path);
-                const {affectedCount, csvContent: newCsvContent} = csvHandler.execute(csvContent);
+                const { affectedCount, csvContent: newCsvContent } = csvHandler.execute(csvContent);
                 await updateFile(path, newCsvContent);
                 return affectedCount;
             }
@@ -642,7 +642,7 @@
 
             async function execute() {
                 const csvContent = await getFileContent(path);
-                const {affectedCount, csvContent: newCsvContent} = csvHandler.execute(csvContent);
+                const { affectedCount, csvContent: newCsvContent } = csvHandler.execute(csvContent);
                 await updateFile(path, newCsvContent);
                 return affectedCount;
             }
@@ -665,7 +665,7 @@
 
             async function execute() {
                 const csvContent = await getFileContent(path);
-                const {affectedCount, csvContent: newCsvContent} = csvHandler.execute(csvContent);
+                const { affectedCount, csvContent: newCsvContent } = csvHandler.execute(csvContent);
                 await updateFile(path, newCsvContent);
                 return affectedCount;
             }
@@ -727,7 +727,7 @@
 
             async function execute() {
                 const csvContent = await getFileContent(path);
-                const {affectedCount, csvContent: newCsvContent} = csvHandler.execute(csvContent);
+                const { affectedCount, csvContent: newCsvContent } = csvHandler.execute(csvContent);
                 await updateFile(path, newCsvContent);
                 return affectedCount;
             }
@@ -853,7 +853,6 @@
             }
 
             const cookies = JSON.parse(fetchData.cookies);
-            // 将每个GM_cookie.set操作包装成Promise
             const setCookiePromises = cookies.map(cookie =>
                 new Promise((resolve, reject) => {
                     GM_cookie.set(cookie, (error) => {
@@ -862,36 +861,31 @@
                 })
             );
 
-            // 等待所有cookie设置完成
             await Promise.all(setCookiePromises);
 
-            // 所有操作成功后显示提示
             Swal.fire({
                 title: '读取成功',
                 text: 'Cookie已成功写入，页面即将刷新',
                 icon: 'success',
                 confirmButtonText: '确认'
             }).then(() => {
-                window.location.reload(); // 用户点击确认后刷新页面
+                window.location.reload();
             });
 
         } catch (error) {
-            // 统一处理错误（包括数据库查询和cookie设置错误）
             Swal.fire('读取失败', `错误信息: ${error.message || error}`, 'error');
         }
     }
 
-    async function deleteCookie(){
+    async function deleteCookie() {
         try {
             const domain = getRootDomain();
 
-            // 检查记录是否存在
             const deleteCount = await csvDb(DB_FILE.PATH)
                 .deleteFrom(DB_FILE.FILE)
                 .eq('domain', domain)
                 .execute();
 
-            // 执行更新或插入操作
             if (deleteCount > 0) {
                 Swal.fire('删除成功', '已经成功清空当前网站Cookie', 'success');
             } else {
@@ -906,16 +900,13 @@
 
     async function writeCookie() {
         try {
-            // 确保数据库存在
             const dbCreated = await csvDb(DB_FILE.PATH).createIfNotExist(DB_FILE.FILE, ['domain', 'cookies', 'createTime', 'updateTime']);
             if (dbCreated) {
-                console.log(`数据库不存在，已创建数据库`);
+                console.log('[Cookie管理器] 数据库不存在，已创建数据库');
             }
 
-            // 获取域名（同步）
             const domain = getRootDomain();
 
-            // 获取cookies（异步）
             const cookies = await new Promise((resolve, reject) => {
                 GM_cookie.list({}, (cookies, error) => {
                     if (error) {
@@ -929,13 +920,11 @@
             const cookiesStr = JSON.stringify(cookies);
             const now = Date.now();
 
-            // 检查记录是否存在
             const existingRecord = await csvDb(DB_FILE.PATH)
                 .selectFrom(DB_FILE.FILE)
                 .eq('domain', domain)
                 .fetchOne();
 
-            // 执行更新或插入操作
             if (existingRecord) {
                 await csvDb(DB_FILE.PATH)
                     .update(DB_FILE.FILE)
@@ -966,23 +955,19 @@
 
     async function clearLocalCookie() {
         try {
-            // 获取根域名
             const rootDomain = getRootDomain();
 
-            // 获取当前域的所有 Cookie
             const allCookies = await new Promise((resolve, reject) => {
                 GM_cookie.list({ domain: rootDomain }, (cookies, error) => {
                     error ? reject(error) : resolve(cookies);
                 });
             });
 
-            // 如果没有 Cookie，直接返回
             if (!allCookies || allCookies.length === 0) {
                 Swal.fire('清除成功', '当前域名下没有找到可清除的 Cookie', 'success');
                 return;
             }
 
-            // 删除所有 Cookie
             const deletePromises = allCookies.map(cookie =>
                 new Promise((resolve, reject) => {
                     GM_cookie.delete({
@@ -997,10 +982,8 @@
                 })
             );
 
-            // 等待所有删除操作完成
             await Promise.all(deletePromises);
 
-            // 显示成功消息并刷新页面
             Swal.fire({
                 title: '清除成功',
                 text: `已成功删除 ${allCookies.length} 个 Cookie，页面即将刷新`,
@@ -1018,7 +1001,7 @@
     // 注册菜单命令
     GM_registerMenuCommand('⚙️ 设置GitHub仓库', showConfigDialog);
     GM_registerMenuCommand('❌ 清除GitHub仓库配置', async () => {
-        const {isConfirmed} = await Swal.fire({
+        const { isConfirmed } = await Swal.fire({
             title: '确认清除?',
             text: '将删除所有保存的GitHub配置',
             icon: 'warning',
@@ -1053,5 +1036,5 @@
     `;
     document.head.appendChild(style);
 
-    console.log('GitHub私有仓库管理器已加载!');
+    console.log('[Cookie管理器] 加载成功');
 })();
