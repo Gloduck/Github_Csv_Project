@@ -190,7 +190,12 @@
 
     // 4. 获取文件信息（不包含内容）
     async function getFileInfo(path) {
-        return githubApiRequest('GET', `/contents/${encodeURIComponent(path)}?ref=${(await getConfig()).branch}`);
+        // 添加随机查询参数，强制绕过缓存
+        const ref = (await getConfig()).branch;
+        const cacheBuster = Date.now();
+        const fileInfo = await githubApiRequest('GET', 
+            `/contents/${encodeURIComponent(path)}?ref=${ref}&_=${cacheBuster}`);
+        return fileInfo;
     }
 
     // 5. 获取文件内容
