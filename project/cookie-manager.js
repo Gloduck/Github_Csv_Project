@@ -197,7 +197,7 @@
         // 添加随机查询参数，强制绕过缓存
         const ref = (await getConfig()).branch;
         const cacheBuster = Date.now();
-        const fileInfo = await githubApiRequest('GET', 
+        const fileInfo = await githubApiRequest('GET',
             `/contents/${encodeURIComponent(path)}?ref=${ref}&_=${cacheBuster}`);
         return fileInfo;
     }
@@ -873,6 +873,18 @@
         return fetchData.supportNames && fetchData.supportNames.length != 0 ? fetchData.supportNames : null;
     }
 
+    function showLoading(title) {
+        const loadingSwal = Swal.fire({
+            title: title,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        return loadingSwal;
+    }
+
     async function readCookie() {
         const { isConfirmed } = await Swal.fire({
             title: '确认读取',
@@ -885,9 +897,13 @@
         if (!isConfirmed) {
             return;
         }
+
+        let readLoading = null;
         try {
             const rootDomain = getRootDomain();
+            readLoading = showLoading('加载中...');
             const fetchData = await csvDb(DB_FILE.PATH).selectFrom(DB_FILE.FILE).eq('domain', rootDomain).fetchOne();
+            await readLoading.close();
 
             if (!fetchData) {
                 Swal.fire('读取失败', 'Cookie不存在，请先创建Cookie', 'error');
@@ -903,7 +919,7 @@
             const validCookies = [];
 
             cookies.forEach(cookie => {
-                if(supportCookieNames != null && !supportCookieNames.includes(cookie.name)){
+                if (supportCookieNames != null && !supportCookieNames.includes(cookie.name)) {
                     return;
                 }
                 if (cookie.expirationDate && cookie.expirationDate < now) {
@@ -967,19 +983,29 @@
             });
 
         } catch (error) {
+            if (readLoading) {
+                await readLoading.close();
+            }
             Swal.fire('读取失败', `错误信息: ${error.message || error}`, 'error');
         }
     }
 
     async function createDbIfNotExist() {
+        let readLoading = null;
         let success = false;
         try {
+            readLoading = showLoading('检查数据库...');
             const dbCreated = await csvDb(DB_FILE.PATH).createIfNotExist(DB_FILE.FILE, ['domain', 'supportNames', 'cookies', 'createTime', 'updateTime']);
+            await readLoading.close();
+
             if (dbCreated) {
                 console.log('[Cookie管理器] 数据库不存在，已创建数据库');
             }
             success = true;
         } catch (error) {
+            if(readLoading){
+                await readLoading.close();
+            }
             Swal.fire('创建数据库失败', `错误信息: ${error.message || error}`, 'error');
         }
         return success;
@@ -990,13 +1016,19 @@
         if (!await createDbIfNotExist()) {
             return;
         }
+        let readLoading = null;
+        let saveLoading = null;
         try {
+            
             const domain = getRootDomain();
+            readLoading = showLoading('加载中...');
             const existingRecord = await csvDb(DB_FILE.PATH)
                 .selectFrom(DB_FILE.FILE)
                 .eq('domain', domain)
                 .fetchOne();
+            await readLoading.close();
             let supportCookieNames = existingRecord ? existingRecord.supportNames : '';
+
             const { value, isConfirmed } = await Swal.fire({
                 title: '允许的Cookie名',
                 input: 'text',
@@ -1010,10 +1042,13 @@
                 confirmButtonText: '确认',
                 cancelButtonText: '取消',
             });
+
             if (!isConfirmed) {
                 return;
             }
             const now = Date.now();
+            saveLoading = showLoading('保存中...');
+            
             if (existingRecord) {
                 await csvDb(DB_FILE.PATH)
                     .update(DB_FILE.FILE)
@@ -1033,8 +1068,16 @@
                     })
                     .execute();
             }
+
+            await saveLoading.close();
             Swal.fire('设置成功', '允许的Cookie名已成功保存到数据库', 'success');
         } catch (error) {
+            if(readLoading){
+                await readLoading.close();
+            }
+            if(saveLoading){
+                await saveLoading.close();
+            }
             Swal.fire('设置失败', `错误信息: ${error.message || error}`, 'error');
         }
     }
@@ -1054,6 +1097,9 @@
         if (!await createDbIfNotExist()) {
             return;
         }
+        let readLoading = null;
+        let saveLoading = null;
+
         try {
             const domain = getRootDomain();
 
@@ -1063,20 +1109,22 @@
                         reject(`获取Cookie失败: ${error}`);
                         return;
                     }
-
                     resolve(cookies);
                 });
             });
 
+            readLoading = showLoading('加载中...');
             const existingRecord = await csvDb(DB_FILE.PATH)
                 .selectFrom(DB_FILE.FILE)
                 .eq('domain', domain)
                 .fetchOne();
+            await readLoading.close();
+
             const supportCookieNames = getSupportCookieNames(existingRecord);
             const validCookies = [];
 
             cookies.forEach(cookie => {
-                if(supportCookieNames != null && !supportCookieNames.includes(cookie.name)){
+                if (supportCookieNames != null && !supportCookieNames.includes(cookie.name)) {
                     return;
                 }
                 validCookies.push(cookie);
@@ -1084,6 +1132,7 @@
             const cookiesStr = JSON.stringify(validCookies);
             const now = Date.now();
 
+            saveLoading = showLoading('保存中...');
             if (existingRecord) {
                 await csvDb(DB_FILE.PATH)
                     .update(DB_FILE.FILE)
@@ -1103,10 +1152,16 @@
                     })
                     .execute();
             }
-
+            await readLoading.close();
             Swal.fire('保存成功', 'Cookie已成功保存到数据库', 'success');
 
         } catch (error) {
+            if(readLoading){
+                await readLoading.close();
+            }
+            if(saveLoading){
+                await saveLoading.close();
+            }
             Swal.fire('保存失败', `错误信息: ${error.message || error}`, 'error');
         }
     }
@@ -1166,9 +1221,14 @@
             Swal.fire('清除失败', `错误信息: ${error.message || error}`, 'error');
         }
     }
+
     async function showCookieManager() {
+        let readLoading = null;
         try {
-            const cookies = await csvDb(DB_FILE.PATH).selectFrom(DB_FILE.FILE).fetch()
+            readLoading = showLoading('加载中...');
+            const cookies = await csvDb(DB_FILE.PATH).selectFrom(DB_FILE.FILE).fetch();
+
+            await readLoading.close();
 
             let tableHTML = `
                 <style>
@@ -1290,6 +1350,9 @@
             });
 
         } catch (error) {
+            if(readLoading){
+                await readLoading.close();
+            }
             Swal.fire('加载失败', `无法获取Cookie列表: ${error.message || error}`, 'error');
         }
     }
