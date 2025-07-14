@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cookie管理器
 // @namespace    cookie_manager
-// @version      1.0
+// @version      1.1
 // @description  支持Cookie跨机器同步，使用Github仓库作为远程存储（Cookie为敏感信息，不要使用公共仓库，请使用私有仓库）
 // @author       Gloduck
 // @license      MIT
