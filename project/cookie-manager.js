@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cookie管理器
 // @namespace    cookie_manager
-// @version      1.1
+// @version      1.2
 // @description  支持Cookie跨机器同步，使用Github仓库作为远程存储（Cookie为敏感信息，不要使用公共仓库，请使用私有仓库）
 // @author       Gloduck
 // @license      MIT
@@ -59,7 +59,7 @@
             focusConfirm: false,
             preConfirm: () => {
                 return {
-                    owner: document.getElementById('owner').value,
+                    owner: cument.getElementById('owner').value,
                     repo: document.getElementById('repo').value,
                     branch: document.getElementById('branch').value || 'main',
                     token: document.getElementById('token').value
@@ -861,13 +861,36 @@
             selectFrom
         }
     }
-
     function getRootDomain() {
-        const parts = window.location.hostname.split('.');
-        if (parts.length > 2) {
-            return parts.slice(-2).join('.');
+        const hostname = window.location.hostname;
+        if (!hostname) return '';
+
+        const specialSuffixes = [
+            'com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn',
+            'co.uk', 'org.uk', 'gov.uk', 'ac.uk',
+            'com.au', 'org.au', 'net.au',
+            'com.sg', 'org.sg', 'net.sg',
+            'co.jp', 'or.jp', 'go.jp', 'ac.jp',
+            'com.hk', 'org.hk', 'net.hk',
+        ];
+
+        const parts = hostname.split('.');
+        const len = parts.length;
+
+        if (len <= 2) {
+            return hostname;
         }
-        return parts.join('.');
+
+        const lastTwoParts = `${parts[len - 2]}.${parts[len - 1]}`;
+        const lastThreeParts = `${parts[len - 3]}.${lastTwoParts}`;
+
+        if (specialSuffixes.includes(lastThreeParts)) {
+            return lastThreeParts;
+        } else if (specialSuffixes.includes(lastTwoParts)) {
+            return `${parts[len - 3]}.${lastTwoParts}`;
+        }
+
+        return `${parts[len - 2]}.${parts[len - 1]}`;
     }
 
     function getSupportCookieNames(fetchData) {
