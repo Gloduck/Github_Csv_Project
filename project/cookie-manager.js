@@ -870,7 +870,7 @@
     }
 
     function getSupportCookieNames(fetchData) {
-        return fetchData.supportNames && fetchData.supportNames.length != 0 ? fetchData.supportNames : null;
+        return fetchData && fetchData.supportNames && fetchData.supportNames.length != 0 ? fetchData.supportNames : null;
     }
 
     function showLoading(title) {
