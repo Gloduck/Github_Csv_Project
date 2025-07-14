@@ -12,6 +12,7 @@
 // @grant        GM_getValue
 // @grant        GM_cookie
 // @grant        GM_deleteValue
+// @grant        unsafeWindow
 // @connect      api.github.com
 // @require      https://cdn.jsdelivr.net/npm/sweetalert2@11
 // @noframes
@@ -1003,14 +1004,13 @@
             }
             success = true;
         } catch (error) {
-            if(readLoading){
+            if (readLoading) {
                 await readLoading.close();
             }
             Swal.fire('创建数据库失败', `错误信息: ${error.message || error}`, 'error');
         }
         return success;
     }
-
 
     async function setSupportCookieNames() {
         if (!await createDbIfNotExist()) {
@@ -1019,7 +1019,7 @@
         let readLoading = null;
         let saveLoading = null;
         try {
-            
+
             const domain = getRootDomain();
             readLoading = showLoading('加载中...');
             const existingRecord = await csvDb(DB_FILE.PATH)
@@ -1041,6 +1041,29 @@
                 showCancelButton: true,
                 confirmButtonText: '确认',
                 cancelButtonText: '取消',
+                // 添加自定义按钮
+                showDenyButton: true,
+                denyButtonText: '解析必要Cookie',
+                preDeny: () => {
+                    try {
+                        Swal.getDenyButton().disabled = true;
+
+                        const result = parseRequireCookie();
+                        if (!result) {
+                            Swal.showValidationMessage('无法解析当前网站必要Cookie');
+                        }
+
+                        Swal.getInput().value = result;
+
+                        Swal.getDenyButton().disabled = false;
+
+                        return false;
+                    } catch (error) {
+                        Swal.getDenyButton().disabled = false;
+                        Swal.showValidationMessage(`解析失败: ${error.message || error}`);
+                        return false;
+                    }
+                }
             });
 
             if (!isConfirmed) {
@@ -1048,7 +1071,7 @@
             }
             const now = Date.now();
             saveLoading = showLoading('保存中...');
-            
+
             if (existingRecord) {
                 await csvDb(DB_FILE.PATH)
                     .update(DB_FILE.FILE)
@@ -1072,10 +1095,10 @@
             await saveLoading.close();
             Swal.fire('设置成功', '允许的Cookie名已成功保存到数据库', 'success');
         } catch (error) {
-            if(readLoading){
+            if (readLoading) {
                 await readLoading.close();
             }
-            if(saveLoading){
+            if (saveLoading) {
                 await saveLoading.close();
             }
             Swal.fire('设置失败', `错误信息: ${error.message || error}`, 'error');
@@ -1156,10 +1179,10 @@
             Swal.fire('保存成功', 'Cookie已成功保存到数据库', 'success');
 
         } catch (error) {
-            if(readLoading){
+            if (readLoading) {
                 await readLoading.close();
             }
-            if(saveLoading){
+            if (saveLoading) {
                 await saveLoading.close();
             }
             Swal.fire('保存失败', `错误信息: ${error.message || error}`, 'error');
@@ -1350,7 +1373,7 @@
             });
 
         } catch (error) {
-            if(readLoading){
+            if (readLoading) {
                 await readLoading.close();
             }
             Swal.fire('加载失败', `无法获取Cookie列表: ${error.message || error}`, 'error');
@@ -1365,6 +1388,58 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
     }
+
+    function parseRequireCookie() {
+        const chains = [
+            new DiscuzCookieFetcher(),
+            new A115CookieFetcher()
+        ];
+        for (let i = 0; i < chains.length; i++) {
+            const fetcher = chains[i];
+            if (fetcher.support()) {
+                return fetcher.parseCookies().join(',');
+            }
+        }
+        return null;
+    }
+
+    class RequireCookieFetcher {
+        support() {
+            return false;
+        }
+        parseCookies() {
+            return null;
+        }
+    }
+
+    class DiscuzCookieFetcher extends RequireCookieFetcher {
+        support() {
+            const html = document.documentElement.outerHTML;
+            return /discuz_uid\s*=\s*(['"])?\d+\1/.test(html);
+        }
+        parseCookies() {
+            const html = document.documentElement.outerHTML;
+            const match = html.match(/cookiepre\s*=\s*(['"])([^'"]+)\1/);
+            if (match) {
+                return [
+                    `${match[2]}auth`,
+                    `${match[2]}saltkey`
+                ];
+            }
+            return null;
+        }
+    }
+
+    class A115CookieFetcher extends RequireCookieFetcher {
+        support() {
+            return window.location.hostname.includes('115.com');
+        }
+        parseCookies() {
+            return ['UID', 'CID', 'SEID', 'KID']
+        }
+    }
+
+
 
     GM_registerMenuCommand('⚙️ 设置GitHub仓库', showGitConfigDialog);
     GM_registerMenuCommand('❌ 清除GitHub仓库配置', clearGitConfig);
