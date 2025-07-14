@@ -869,6 +869,10 @@
         return parts.join('.');
     }
 
+    function getSupportCookieNames(fetchData) {
+        return fetchData.supportNames && fetchData.supportNames.length != 0 ? fetchData.supportNames : null;
+    }
+
     async function readCookie() {
         const { isConfirmed } = await Swal.fire({
             title: '确认读取',
@@ -890,7 +894,7 @@
                 return;
             }
 
-            const filterCookieNames = fetchData.ignoreNames ? fetchData.ignoreNames.split(',') : [];
+            const supportCookieNames = getSupportCookieNames(fetchData);
             let cookies = JSON.parse(fetchData.cookies);
 
             // 检查过期Cookie
@@ -899,7 +903,7 @@
             const validCookies = [];
 
             cookies.forEach(cookie => {
-                if (filterCookieNames.includes(cookie.name)) {
+                if(supportCookieNames != null && !supportCookieNames.includes(cookie.name)){
                     return;
                 }
                 if (cookie.expirationDate && cookie.expirationDate < now) {
@@ -970,7 +974,7 @@
     async function createDbIfNotExist() {
         let success = false;
         try {
-            const dbCreated = await csvDb(DB_FILE.PATH).createIfNotExist(DB_FILE.FILE, ['domain', 'ignoreNames', 'cookies', 'createTime', 'updateTime']);
+            const dbCreated = await csvDb(DB_FILE.PATH).createIfNotExist(DB_FILE.FILE, ['domain', 'supportNames', 'cookies', 'createTime', 'updateTime']);
             if (dbCreated) {
                 console.log('[Cookie管理器] 数据库不存在，已创建数据库');
             }
@@ -981,7 +985,8 @@
         return success;
     }
 
-    async function setIgnoreCookieNames() {
+
+    async function setSupportCookieNames() {
         if (!await createDbIfNotExist()) {
             return;
         }
@@ -991,15 +996,15 @@
                 .selectFrom(DB_FILE.FILE)
                 .eq('domain', domain)
                 .fetchOne();
-            let ignoreCookieNames = existingRecord ? existingRecord.ignoreNames : '';
+            let supportCookieNames = existingRecord ? existingRecord.supportNames : '';
             const { value, isConfirmed } = await Swal.fire({
-                title: '过滤 Cookie',
+                title: '允许的Cookie名',
                 input: 'text',
-                inputValue: ignoreCookieNames,
-                inputLabel: '输入需要过滤的 Cookie 名称',
+                inputValue: supportCookieNames,
+                inputLabel: '留空则同步所有Cookie，否则同步指定Cookie',
                 inputPlaceholder: '多个名称用逗号分隔，例如: session, token',
                 inputAttributes: {
-                    'aria-label': '输入需要过滤的 Cookie 名称'
+                    'aria-label': '留空则同步所有Cookie，否则同步指定Cookie'
                 },
                 showCancelButton: true,
                 confirmButtonText: '确认',
@@ -1013,7 +1018,7 @@
                 await csvDb(DB_FILE.PATH)
                     .update(DB_FILE.FILE)
                     .eq('domain', domain)
-                    .set('ignoreNames', value)
+                    .set('supportNames', value)
                     .set('updateTime', now)
                     .execute();
             } else {
@@ -1022,13 +1027,13 @@
                     .value({
                         domain,
                         cookies: '',
-                        ignoreNames: value,
+                        supportNames: value,
                         createTime: now,
                         updateTime: now
                     })
                     .execute();
             }
-            Swal.fire('设置成功', '需要过滤的Cookie名已成功保存到数据库', 'success');
+            Swal.fire('设置成功', '允许的Cookie名已成功保存到数据库', 'success');
         } catch (error) {
             Swal.fire('设置失败', `错误信息: ${error.message || error}`, 'error');
         }
@@ -1067,11 +1072,11 @@
                 .selectFrom(DB_FILE.FILE)
                 .eq('domain', domain)
                 .fetchOne();
-            const filterCookieNames = existingRecord?.ignoreNames ? existingRecord.ignoreNames.split(',') : [];
+            const supportCookieNames = getSupportCookieNames(existingRecord);
             const validCookies = [];
 
             cookies.forEach(cookie => {
-                if (filterCookieNames.includes(cookie.name)) {
+                if(supportCookieNames != null && !supportCookieNames.includes(cookie.name)){
                     return;
                 }
                 validCookies.push(cookie);
@@ -1092,7 +1097,7 @@
                     .value({
                         domain,
                         cookies: cookiesStr,
-                        ignoreNames: '',
+                        supportNames: '',
                         createTime: now,
                         updateTime: now
                     })
@@ -1221,7 +1226,7 @@
                     <thead>
                         <tr>
                             <th style="width: 20%;">域名</th>
-                            <th style="width: 20%;">忽略</th>
+                            <th style="width: 20%;">允许Cookie名</th>
                             <th style="width: 50%;">值</th>
                             <th style="width: 10%;">操作</th>
                         </tr>
@@ -1233,7 +1238,7 @@
                 tableHTML += `
                     <tr>
                         <td>${escapeHTML(cookie.domain)}</td>
-                        <td>${escapeHTML(cookie.ignoreNames)}</td>
+                        <td>${getSupportCookieNames(cookie) ? escapeHTML(cookie.supportNames) : '全部'}</td>
                         <td>${escapeHTML(cookie.cookies)}</td>
                         <td>
                             <button class="delete-btn" 
@@ -1302,7 +1307,7 @@
     GM_registerMenuCommand('❌ 清除GitHub仓库配置', clearGitConfig);
     GM_registerMenuCommand('👉保存网站Cookie到仓库', writeCookie);
     GM_registerMenuCommand('👉从仓库读取网站Cookie', readCookie);
-    GM_registerMenuCommand('👉设置忽略Cookie名', setIgnoreCookieNames);
+    GM_registerMenuCommand('👉设置允许的Cookie名', setSupportCookieNames);
     GM_registerMenuCommand('👉管理仓库Cookie', showCookieManager);
     GM_registerMenuCommand('👉清空网站本地Cookie', clearLocalCookie);
 
