@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cookie管理器
 // @namespace    cookie_manager
-// @version      1.2
+// @version      1.3
 // @description  支持Cookie跨机器同步，使用Github仓库作为远程存储（Cookie为敏感信息，不要使用公共仓库，请使用私有仓库）
 // @author       Gloduck
 // @license      MIT
@@ -1310,21 +1310,36 @@
                         max-height: 60vh;
                         overflow-y: auto;
                     }
-                    .delete-btn {
-                        background-color: #ff6b6b;
+                    .action-btn {
                         color: white;
                         border: none;
                         padding: 5px 10px;
                         border-radius: 3px;
                         cursor: pointer;
                         transition: background-color 0.2s;
+                        margin: 2px;
+                        font-size: 12px;
+                    }
+                    .edit-btn {
+                        background-color: #4CAF50;
+                    }
+                    .edit-btn:hover {
+                        background-color: #45a049;
+                    }
+                    .delete-btn {
+                        background-color: #ff6b6b;
                     }
                     .delete-btn:hover {
                         background-color: #ff5252;
                     }
-                    .delete-btn:disabled {
+                    .action-btn:disabled {
                         background-color: #cccccc;
                         cursor: not-allowed;
+                    }
+                    .btn-container {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 5px;
                     }
                 </style>
                 <div class="cookie-manager-container">
@@ -1333,8 +1348,8 @@
                         <tr>
                             <th style="width: 20%;">域名</th>
                             <th style="width: 20%;">允许Cookie名</th>
-                            <th style="width: 50%;">值</th>
-                            <th style="width: 10%;">操作</th>
+                            <th style="width: 40%;">值</th>
+                            <th style="width: 20%;">操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1342,15 +1357,21 @@
 
             cookies.forEach(cookie => {
                 tableHTML += `
-                    <tr>
+                    <tr data-domain="${escapeHTML(cookie.domain)}">
                         <td>${escapeHTML(cookie.domain)}</td>
                         <td>${getSupportCookieNames(cookie) ? escapeHTML(cookie.supportNames) : '全部'}</td>
                         <td>${escapeHTML(cookie.cookies)}</td>
                         <td>
-                            <button class="delete-btn" 
-                                data-domain="${escapeHTML(cookie.domain)}">
-                                删除
-                            </button>
+                            <div class="btn-container">
+                                <button class="action-btn edit-btn" 
+                                    data-domain="${escapeHTML(cookie.domain)}">
+                                    编辑
+                                </button>
+                                <button class="action-btn delete-btn" 
+                                    data-domain="${escapeHTML(cookie.domain)}">
+                                    删除
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -1373,23 +1394,15 @@
                         button.addEventListener('click', async (e) => {
                             const btn = e.currentTarget;
                             const targetDomain = btn.dataset.domain;
-                            btn.textContent = '删除中...';
-                            btn.disabled = true;
+                            handleDeleteCookie(btn, targetDomain);
+                        });
+                    });
 
-                            try {
-
-                                const deleteCount = await csvDb(DB_FILE.PATH)
-                                    .deleteFrom(DB_FILE.FILE)
-                                    .eq('domain', targetDomain)
-                                    .execute();
-                                if (deleteCount > 0) {
-                                    btn.closest('tr').remove();
-                                }
-                            } catch (error) {
-                                btn.textContent = '删除';
-                                btn.disabled = false;
-                                Swal.fire('删除失败', `无法删除Cookie: ${error.message || error}`, 'error');
-                            }
+                    document.querySelectorAll('.edit-btn').forEach(button => {
+                        button.addEventListener('click', async (e) => {
+                            const btn = e.currentTarget;
+                            const targetDomain = btn.dataset.domain;
+                            handleEditCookie(btn, targetDomain);
                         });
                     });
                 }
@@ -1400,6 +1413,125 @@
                 await readLoading.close();
             }
             Swal.fire('加载失败', `无法获取Cookie列表: ${error.message || error}`, 'error');
+        }
+    }
+
+    async function handleDeleteCookie(button, domain) {
+        button.textContent = '删除中...';
+        button.disabled = true;
+
+        try {
+            const deleteCount = await csvDb(DB_FILE.PATH)
+                .deleteFrom(DB_FILE.FILE)
+                .eq('domain', domain)
+                .execute();
+
+            if (deleteCount > 0) {
+                button.closest('tr').remove();
+                Swal.fire('删除成功', `已删除 ${domain} 的Cookie`, 'success');
+            }
+        } catch (error) {
+            button.textContent = '删除';
+            button.disabled = false;
+            Swal.fire('删除失败', `无法删除Cookie: ${error.message || error}`, 'error');
+        }
+    }
+    async function handleEditCookie(button, domain) {
+        button.textContent = '加载中...';
+        button.disabled = true;
+
+        try {
+            const cookieRecord = await csvDb(DB_FILE.PATH)
+                .selectFrom(DB_FILE.FILE)
+                .eq('domain', domain)
+                .fetchOne();
+
+            button.textContent = '编辑';
+            button.disabled = false;
+
+            if (!cookieRecord) {
+                Swal.fire('错误', `找不到 ${domain} 的Cookie记录`, 'error');
+                return;
+            }
+
+            let formattedCookies = cookieRecord.cookies;
+            try {
+                formattedCookies = JSON.stringify(JSON.parse(cookieRecord.cookies), null, 2);
+            } catch (e) {
+            }
+
+            const result = await Swal.fire({
+                title: `编辑Cookie - ${domain}`,
+                html: `
+                    <div style="text-align: left; margin-bottom: 10px;">
+                        <label for="supportNames">允许的Cookie名 (逗号分隔):</label>
+                        <input id="supportNames" class="swal2-input" style="width: 90%;" value="${escapeHTML(cookieRecord.supportNames || '')}">
+                    </div>
+                    <div style="text-align: left; width: 100%;">
+                        <label for="cookies">Cookie值 (JSON格式):</label>
+                        <div style="width: 100%;">
+                            <textarea id="cookies" class="swal2-textarea" style="width: 90%;">${escapeHTML(formattedCookies)}</textarea>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: '保存',
+                cancelButtonText: '取消',
+                preConfirm: () => {
+                    return {
+                        supportNames: document.getElementById('supportNames').value,
+                        cookies: document.getElementById('cookies').value
+                    };
+                }
+            });
+
+            if (result.isDismissed || result.isConfirmed) {
+                if (result.isConfirmed) {
+                    const formValues = result.value;
+
+                    let jsonData;
+                    try {
+                        jsonData = JSON.parse(formValues.cookies);
+                    } catch (error) {
+                        await Swal.fire('格式错误', 'Cookie值必须是有效的JSON格式', 'error');
+                        showCookieManager();
+                        return;
+                    }
+
+                    const updateLoading = showLoading('保存中...');
+                    const now = Date.now();
+
+                    try {
+                        await csvDb(DB_FILE.PATH)
+                            .update(DB_FILE.FILE)
+                            .eq('domain', domain)
+                            .set('supportNames', formValues.supportNames)
+                            .set('cookies', JSON.stringify(jsonData))
+                            .set('updateTime', now)
+                            .execute();
+
+                        await updateLoading.close();
+
+                        await Swal.fire({
+                            title: '更新成功',
+                            text: `${domain} 的Cookie已更新`,
+                            icon: 'success',
+                            confirmButtonText: '确认'
+                        });
+                    } catch (error) {
+                        await updateLoading.close();
+                        await Swal.fire('保存失败', `保存时发生错误: ${error.message || error}`, 'error');
+                    }
+                }
+
+                showCookieManager();
+            }
+        } catch (error) {
+            button.textContent = '编辑';
+            button.disabled = false;
+            await Swal.fire('编辑失败', `错误信息: ${error.message || error}`, 'error');
+            showCookieManager();
         }
     }
 
